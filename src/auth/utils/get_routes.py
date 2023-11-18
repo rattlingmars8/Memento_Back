@@ -1,10 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    status,
+    Response,
+    BackgroundTasks,
+)
 from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.schemas import UserRead, UserCreate, OnLoginResponse
 from src.auth.service import user_service
 from src.auth.utils.TokenType import TokenType
+from src.auth.utils.email import send_email_verification
 from src.database.sql.postgres import database
 import src.auth.repository as repo
 
@@ -100,14 +109,9 @@ class AuthRoutes:
             refresh_token: str,
             db: AsyncSession = Depends(database),
         ):
-            user = await self.user_service.decode_token(refresh_token, TokenType.REFRESH, db)
-            # if not payload:
-            #     raise HTTPException(
-            #         status_code=status.HTTP_401_UNAUTHORIZED,
-            #         detail="Invalid refresh token",
-            #     )
-            #
-            # user = await repo.id_user_auth(payload["uid"], db)
+            user = await self.user_service.decode_token(
+                refresh_token, TokenType.REFRESH, db
+            )
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -129,6 +133,49 @@ class AuthRoutes:
                 ),
                 access_token=access_token,
             )
+
+        return router
+
+    def verify_email_route(self):
+        router = APIRouter()
+
+        @router.post("/request-verify", status_code=status.HTTP_200_OK)
+        async def request_verify(
+            user_email: str,
+            request: Request,
+            # bg_tasks: BackgroundTasks,
+            db: AsyncSession = Depends(database),
+        ):
+            user = await repo.get_user_by_email(user_email, db)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found",
+                )
+            verify_token = await self.user_service.generate_token(
+                TokenType.VERIFY, user.id, ttl_in_minutes=60
+            )
+            await send_email_verification(
+                user.email, user.username, verify_token, request.headers["Origin"]
+            )
+            return {"detail": f"Email instructions to verify was sent to {user.email}."}
+
+        @router.get("/verify/{verify_token}", status_code=status.HTTP_200_OK)
+        async def verify(
+            verify_token: str,
+            db: AsyncSession = Depends(database),
+        ):
+            user = await self.user_service.decode_token(
+                verify_token, TokenType.VERIFY, db
+            )
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token",
+                )
+
+            return {"detail": "Email verified"}
+
         return router
 
 
