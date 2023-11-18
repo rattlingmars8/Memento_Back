@@ -1,135 +1,48 @@
-import os
-import uuid
-from typing import Optional
+from typing import Literal
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from fastapi import Depends, Request
-from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
-from fastapi_users.authentication import (
-    AuthenticationBackend,
-    BearerTransport,
-    JWTStrategy,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi_users.db import SQLAlchemyUserDatabase
-from httpx_oauth.clients.google import GoogleOAuth2
-from starlette.responses import JSONResponse
-
-from src.auth.utils.email import send_email_for_reset_pswd, send_email_verification
-from src.auth.utils.send_post import send_post_request
-from src.config import settings
-from src.database.sql.postgres import User, get_user_db
-
-# should be remade to get it from .env
-google_oauth_client = GoogleOAuth2(
-    os.getenv("GOOGLE_OAUTH_CLIENT_ID", ""),
-    os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", ""),
-)
-
-SECRET = settings.secret_key
-bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
+from src.auth.schemas import UserRead, UserCreate
+from src.auth.utils.JWTContext import JWTContext
+from src.auth.utils.TokenType import TokenType
+from src.auth.utils.authutils import authutils
+from src.database.sql.postgres import database
 
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-    """
-    User Manager Class
+class UserService:
+    jwt_settings = JWTContext()
+    au = authutils
 
-    This class provides user management functionality, including registration,
-    password reset, and email verification.
+    async def generate_hashed_password(self, password: str) -> str:
+        return self.jwt_settings.pwd_context.hash(password)
 
-    Attributes:
-        reset_password_token_secret (str): The secret for generating reset password tokens.
-        verification_token_secret (str): The secret for generating email verification tokens.
+    def verify_password(self, password: str, hashed_password: str) -> bool:
+        return self.jwt_settings.pwd_context.verify(password, hashed_password)
 
-    Methods:
-        on_after_register(self, user: User, request: Optional[Request] = None) -> JSONResponse:
-            Perform actions after a user registers.
-
-        on_after_forgot_password(self, user: User, token: str, request: Optional[Request] = None):
-            Perform actions after a user requests a password reset.
-
-        on_after_request_verify(self, user: User, token: str, request: Optional[Request] = None):
-            Perform actions after a user requests email verification.
-    """
-    reset_password_token_secret = SECRET
-    verification_token_secret = SECRET
-
-    async def on_after_register(self, user: User, request: Optional[Request] = None):
-        """
-        Perform actions after a user registers.
-
-        :param user (User): The registered user.
-        :param request (Optional[Request]): The request object (optional).
-
-        :return: JSONResponse: A response indicating the registration status.
-        """
-        print(f"User {user.id} has registered.")
-        result = await send_post_request(
-            request, str(user.email), "auth/request-verify-token"
-        )
-        return JSONResponse(result)
-
-    async def on_after_forgot_password(
-        self, user: User, token: str, request: Optional[Request] = None
-    ):
-        """
-        Perform actions after a user requests a password reset.
-
-        :param user (User): The user who requested the password reset.
-        :param token (str): The reset token.
-        :param request (Optional[Request]): The request object (optional).
-        """
-        await send_email_for_reset_pswd(
-            user.email, user.username, token, request.base_url
+    async def generate_token(
+        self,
+        token_type: TokenType,
+        user_id: str,
+        ttl_in_minutes: int | None,
+    ) -> str:
+        return self.jwt_settings.create_token(
+            token_type, {"uid": str(user_id)}, ttl=ttl_in_minutes
         )
 
-        print(f"User {user.id} has forgot their password. Reset token: {token}")
+    async def decode_token(
+        self, token: str, token_type: TokenType, db: AsyncSession
+    ) -> str:
+        return self.jwt_settings.decode_token(token, token_type, db)
 
-    async def on_after_request_verify(
-        self, user: User, token: str, request: Optional[Request] = None
-    ):
-        """
-        Perform actions after a user requests email verification.
-
-        :param user (User): The user who requested email verification.
-        :param token (str): The verification token.
-        :param request (Optional[Request]): The request object (optional).
-        """
-        await send_email_verification(
-            user.email, user.username, token, request.base_url
-        )
-        print(f"Verification requested for user {user.id}. Verification token: {token}")
+    async def current_active_user(
+        self,
+        token: str = Depends(jwt_settings.oauth2_scheme),
+        db: AsyncSession = Depends(database),
+    ) -> str:
+        return await self.au.get_current_active_user(token=token, db=db)
 
 
-async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
-    """
-    The get_user_manager function is a dependency provider that returns an instance of the UserManager class.
-    The UserManager class is responsible for managing users in the database.
-    It provides methods to create, update, and delete users as well as retrieve them by their ID or username.
+user_service = UserService()
 
-    :param user_db: SQLAlchemyUserDatabase: Pass the user database instance to the function
-    :return: A UserManager instance
-    """
-    yield UserManager(user_db)
-
-
-def get_jwt_strategy() -> JWTStrategy:
-    """
-    The get_jwt_strategy function returns a JWTStrategy object.
-    The JWTStrategy object is initialized with the secret key and lifetime seconds arguments.
-    The secret key argument is set to the value of settings.secret_key, which was imported from settings/base.py.
-
-    :return: A JWTStrategy object
-    """
-    return JWTStrategy(secret=settings.secret_key, lifetime_seconds=3600)
-
-
-auth_backend = AuthenticationBackend(
-    name="jwt",
-    transport=bearer_transport,
-    get_strategy=get_jwt_strategy,
-)
-
-fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
-
-# add cache
-current_active_user = fastapi_users.current_user(active=True)
+current_active_user = user_service.current_active_user

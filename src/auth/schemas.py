@@ -1,15 +1,29 @@
 import uuid
+from datetime import datetime
 
-from fastapi_users import schemas
+from pydantic import BaseModel, EmailStr
 
 
-class UserRead(schemas.BaseUser[uuid.UUID]):
+class UserRead(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    username: str
+    avatar: str
+
+    class Config:
+        from_attributes: True
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
     username: str
 
+    class Config:
+        from_attributes: True
 
-class UserCreate(schemas.BaseUserCreate):
-    username: str
 
-
-class UserUpdate(UserCreate):
-    pass
+class OnLoginResponse(BaseModel):
+    user: UserRead
+    access_token: str
+    # refresh_token: str

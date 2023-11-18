@@ -1,11 +1,12 @@
 import uvicorn
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio.client import Redis
 
-from src.auth.service import current_active_user
+from src.auth.service import user_service, current_active_user
 from src.database.sql.models import User
 from src.database.sql.postgres import database
 from src.database.cache.redis_conn import cache_database
@@ -19,6 +20,11 @@ from src.auth.utils.access import access_service
 from src.tag.routes import router as tags
 from src.rating.routes import router as rating
 
+origins = [
+    "http://localhost:5173",
+]
+
+
 app = FastAPI()
 
 app.include_router(auth)
@@ -27,6 +33,13 @@ app.include_router(images, prefix="/api")
 app.include_router(comments, prefix="/api")
 app.include_router(tags, prefix="/api")
 app.include_router(rating, prefix="/api")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")

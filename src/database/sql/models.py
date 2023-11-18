@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from pydantic import EmailStr
 
 from fastapi_users_db_sqlalchemy import (
     SQLAlchemyBaseUserTableUUID,
@@ -16,22 +17,28 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
-class OAuthAccount(SQLAlchemyBaseOAuthAccountTableUUID, Base):
-    pass
-
-
-class User(SQLAlchemyBaseUserTableUUID, Base):
-    username: Mapped[str] = mapped_column(String(50), nullable=False)
-
+class User(Base):
+    __tablename__ = "user"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(
+        String(length=320), unique=True, index=True, nullable=False
+    )
+    username: Mapped[str] = mapped_column(
+        String(length=50), unique=True, nullable=False
+    )
+    avatar: Mapped[str] = mapped_column(String(length=1024), nullable=True, default="https://static.vecteezy.com/system/resources/previews/021/548/095/non_2x/default-profile-picture-avatar-user-avatar-icon-person-icon-head-icon-profile-picture-icons-default-anonymous-user-male-and-female-businessman-photo-placeholder-social-network-avatar-portrait-free-vector.jpg")
+    hashed_password: Mapped[str] = mapped_column(String(length=1024), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    refresh_token: Mapped[str] = mapped_column(
+        String(length=1024), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        "created_at", DateTime, default=func.now(), nullable=True
+    )
     access_level: Mapped[int] = mapped_column(
         Integer, ForeignKey("permissions.id"), default=1
-    )
-    created_at: Mapped[DateTime] = mapped_column(
-        "crated_at", DateTime, default=func.now()
-    )
-
-    oauth_accounts: Mapped[list[OAuthAccount]] = relationship(
-        "OAuthAccount", lazy="joined"
     )
     permission: Mapped["Permission"] = relationship(
         "Permission", back_populates="users", lazy="joined"
@@ -45,7 +52,9 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     ratings: Mapped[list["Rating"]] = relationship(
         "Rating", back_populates="owner", lazy="joined"
     )
-    likes: Mapped[list["Like"]] = relationship("Like", back_populates="user", lazy="joined")
+    likes: Mapped[list["Like"]] = relationship(
+        "Like", back_populates="owner", lazy="joined"
+    )
 
 
 class Permission(Base):
@@ -122,7 +131,9 @@ class Image(Base):
     comments: Mapped[list[Comment]] = relationship(
         "Comment", back_populates="image", lazy="joined", cascade="all, delete"
     )
-    likes: Mapped[list["Like"]] = relationship("Like", back_populates="image", lazy="joined")
+    likes: Mapped[list["Like"]] = relationship(
+        "Like", back_populates="image", lazy="joined"
+    )
 
 
 class Tag(Base):
@@ -156,7 +167,6 @@ class Like(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id"))
     image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id"))
     owner: Mapped[User] = relationship("User", back_populates="likes")
-    user: Mapped[User] = relationship("User", back_populates="likes")
     image: Mapped[Image] = relationship("Image", back_populates="likes")
     created_at: Mapped[datetime] = mapped_column(
         "created_at", DateTime, default=func.now(), nullable=True
