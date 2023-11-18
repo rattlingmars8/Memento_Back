@@ -25,14 +25,18 @@ class JWTContext:
     def create_token(self, token_type: TokenType, param: dict, ttl: int = None) -> str:
         to_encode = param.copy()
         expire = self._calculate_expiry(ttl)
-        to_encode.update({"iat": datetime.utcnow(), "exp": expire, "ttype": token_type.value})
+        to_encode.update(
+            {"iat": datetime.utcnow(), "exp": expire, "ttype": token_type.value}
+        )
         encoded_jwt = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
         return encoded_jwt
 
-    async def decode_token(self, token: str, token_type: TokenType, db: AsyncSession) -> dict:
-        payload = self._verify_token(token, token_type)
+    async def decode_token(
+        self, token: str, token_type: TokenType, db: AsyncSession
+    ) -> dict:
+        payload = await self._verify_token(token, token_type)
         print(payload)
-        user = await repo.id_user_auth(UUID(payload["uid"]), db=db)
+        user = await repo.id_user_auth(payload["uid"], db=db)
         print(user)
 
         if token_type == TokenType.VERIFY:
@@ -40,26 +44,37 @@ class JWTContext:
             await db.commit()
             await db.refresh(user)
 
-        return self._token_response(user, token_type)
+        return await self._token_response(user, token, token_type)
 
-    def _verify_token(self, token: str, token_type: TokenType) -> dict:
+    async def _verify_token(self, token: str, token_type: TokenType) -> dict:
         try:
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
             # print(payload)
             if payload["ttype"] != token_type.value:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token type",
+                )
             return payload
         except JWTError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
 
-    def _token_response(self, user: User, token_type: TokenType):
+    async def _token_response(self, user: User, token: str, token_type: TokenType):
         if token_type == TokenType.ACCESS or token_type == TokenType.VERIFY:
-            print(user.email)
+            # print(user.email)
             return user
         elif token_type == TokenType.REFRESH:
-            return user.email
+            if user.refresh_token != token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+                )
+            return user
         elif token_type == TokenType.FORGOT:
             return True if user else False
 
     def _calculate_expiry(self, ttl: int = None) -> datetime:
-        return datetime.utcnow() + timedelta(minutes=ttl if ttl is not None else self.DEFAULT_TTL_MINUTES)
+        return datetime.utcnow() + timedelta(
+            minutes=ttl if ttl is not None else self.DEFAULT_TTL_MINUTES
+        )

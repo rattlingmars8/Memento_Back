@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status, Depends
@@ -10,7 +12,7 @@ from src.database.sql.postgres import database
 
 
 async def id_user_auth(_id: str, db: AsyncSession) -> User:
-    result = await db.execute(select(User).where(User.id == _id))
+    result = await db.execute(select(User).where(User.id == UUID(_id)))
     existing_user = result.scalar()
     return existing_user
 

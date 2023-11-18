@@ -33,7 +33,7 @@ class UserService:
     async def decode_token(
         self, token: str, token_type: TokenType, db: AsyncSession
     ) -> str:
-        return self.jwt_settings.decode_token(token, token_type, db)
+        return await self.jwt_settings.decode_token(token, token_type, db)
 
     async def current_active_user(
         self,

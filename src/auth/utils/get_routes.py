@@ -39,7 +39,9 @@ class AuthRoutes:
     def generate_login_route(self):
         router = APIRouter()
 
-        @router.post("/jwt/login", status_code=status.HTTP_200_OK, response_model=OnLoginResponse)
+        @router.post(
+            "/jwt/login", status_code=status.HTTP_200_OK, response_model=OnLoginResponse
+        )
         async def login_route(
             response: Response,
             body: OAuth2PasswordRequestForm = Depends(),
@@ -57,17 +59,67 @@ class AuthRoutes:
                     detail="Email is not verified. Please varify your email: "
                     + user.email,
                 )
-            if not self.user_service.verify_password(body.password, user.hashed_password):
+            if not self.user_service.verify_password(
+                body.password, user.hashed_password
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid username or password",
                 )
-            access_token = await self.user_service.generate_token(TokenType.ACCESS, user.id, ttl_in_minutes=30)
-            refresh_token = await self.user_service.generate_token(TokenType.REFRESH, user.id, ttl_in_minutes=60)
+            access_token = await self.user_service.generate_token(
+                TokenType.ACCESS, user.id, ttl_in_minutes=30
+            )
+            refresh_token = await self.user_service.generate_token(
+                TokenType.REFRESH, user.id, ttl_in_minutes=60
+            )
+            print(access_token)
             print(refresh_token)
             await repo.update_refresh_token(user, refresh_token, db)
 
-            response.set_cookie("refresh_token", refresh_token, httponly=True, max_age=7200)
+            response.set_cookie(
+                "refresh_token", refresh_token, httponly=True, max_age=7200
+            )
+            return OnLoginResponse(
+                user=UserRead(
+                    id=user.id,
+                    username=user.username,
+                    email=user.email,
+                    avatar=user.avatar,
+                ),
+                access_token=access_token,
+            )
+
+        return router
+
+    def generate_refresh_route(self):
+        router = APIRouter()
+
+        @router.post("/jwt/refresh", status_code=status.HTTP_200_OK)
+        async def refresh_route(
+            response: Response,
+            refresh_token: str,
+            db: AsyncSession = Depends(database),
+        ):
+            user = await self.user_service.decode_token(refresh_token, TokenType.REFRESH, db)
+            # if not payload:
+            #     raise HTTPException(
+            #         status_code=status.HTTP_401_UNAUTHORIZED,
+            #         detail="Invalid refresh token",
+            #     )
+            #
+            # user = await repo.id_user_auth(payload["uid"], db)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token",
+                )
+
+            access_token = await self.user_service.generate_token(
+                TokenType.ACCESS, user.id, ttl_in_minutes=30
+            )
+            print(access_token)
+
+            # response.set_cookie("refresh_token", refresh_token, httponly=True, max_age=7200)
             return OnLoginResponse(
                 user=UserRead(
                     id=user.id,
