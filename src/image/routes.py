@@ -98,8 +98,19 @@ async def create_image(
     r = UploadImage.upload(image_file.file, public_id)
     src_url = UploadImage.get_pic_url(public_id, r)
     image = await ImageQuery.create(title, src_url, user, db)
+    response = ImageSchemaResponse(
+        id=image.id,
+        title=title,
+        owner_id=user.id,
+        owner_username=user.username,
+        cloudinary_url=src_url,
+        rating=image.rating,
+        edited_cloudinary_url=image.edited_cloudinary_url,
+        created_at=image.created_at,
+        updated_at=image.updated_at
+        )
 
-    return image
+    return response
 
 
 @router.get("/search/{image_search_string}")

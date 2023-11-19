@@ -46,3 +46,8 @@ async def create_user(user_info: UserCreate, db: AsyncSession):
         return None
 
 
+async def get_user_by_username(username: str, db: AsyncSession) -> User:
+    query = select(User).where(User.username == username)
+    result = await db.execute(query)
+    existing_user = result.scalar()
+    return existing_user

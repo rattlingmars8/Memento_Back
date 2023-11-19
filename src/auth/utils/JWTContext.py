@@ -22,9 +22,17 @@ class JWTContext:
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/jwt/login")
 
-    def create_token(self, token_type: TokenType, param: dict, ttl: int = None) -> str:
-        to_encode = param.copy()
-        expire = self._calculate_expiry(ttl)
+    async def generate_hashed_password(self, password: str) -> str:
+        return self.pwd_context.hash(password)
+
+    async def verify_password(self, password: str, hashed_password: str) -> bool:
+        return self.pwd_context.verify(password, hashed_password)
+
+    async def create_token(
+        self, token_type: TokenType, user_id: str, ttl_in_minutes: int | None
+    ) -> str:
+        to_encode = {"uid": str(user_id)}
+        expire = self._calculate_expiry(ttl_in_minutes)
         to_encode.update(
             {"iat": datetime.utcnow(), "exp": expire, "ttype": token_type.value}
         )
@@ -33,13 +41,18 @@ class JWTContext:
 
     async def decode_token(
         self, token: str, token_type: TokenType, db: AsyncSession
-    ) -> dict:
+    ) -> dict | User | bool:
         payload = await self._verify_token(token, token_type)
         print(payload)
         user = await repo.id_user_auth(payload["uid"], db=db)
         print(user)
 
         if token_type == TokenType.VERIFY:
+            if user.is_verified:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User is already verified",
+                )
             user.is_verified = True
             await db.commit()
             await db.refresh(user)
@@ -72,7 +85,7 @@ class JWTContext:
                 )
             return user
         elif token_type == TokenType.FORGOT:
-            return True if user else False
+            return user if user else False
 
     def _calculate_expiry(self, ttl: int = None) -> datetime:
         return datetime.utcnow() + timedelta(

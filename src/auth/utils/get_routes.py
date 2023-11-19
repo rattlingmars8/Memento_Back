@@ -1,21 +1,16 @@
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Request,
     status,
     Response,
-    BackgroundTasks,
 )
 from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.schemas import UserRead, UserCreate, OnLoginResponse
 from src.auth.service import user_service
-from src.auth.utils.TokenType import TokenType
-from src.auth.utils.email import send_email_verification
 from src.database.sql.postgres import database
-import src.auth.repository as repo
 
 
 class AuthRoutes:
@@ -32,15 +27,9 @@ class AuthRoutes:
             user_create: UserCreate,
             db: AsyncSession = Depends(database),
         ):
-            try:
-                user = await self.user_service.au.register_user(
-                    user_create, db=db, request=request
-                )
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                )
-            # print(user)
+            user = await self.user_service.au.register_user(
+                user_create, db=db, request=request
+            )
             return user
 
         return router
@@ -56,37 +45,8 @@ class AuthRoutes:
             body: OAuth2PasswordRequestForm = Depends(),
             db: AsyncSession = Depends(database),
         ):
-            user = await repo.get_user_by_email(body.username, db)
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid username or password",
-                )
-            if not user.is_verified:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Email is not verified. Please varify your email: "
-                    + user.email,
-                )
-            if not self.user_service.verify_password(
-                body.password, user.hashed_password
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid username or password",
-                )
-            access_token = await self.user_service.generate_token(
-                TokenType.ACCESS, user.id, ttl_in_minutes=30
-            )
-            refresh_token = await self.user_service.generate_token(
-                TokenType.REFRESH, user.id, ttl_in_minutes=60
-            )
-            print(access_token)
-            print(refresh_token)
-            await repo.update_refresh_token(user, refresh_token, db)
-
-            response.set_cookie(
-                "refresh_token", refresh_token, httponly=True, max_age=7200
+            user, access_token = await self.user_service.au.login_user(
+                response=response, body=body, db=db
             )
             return OnLoginResponse(
                 user=UserRead(
@@ -109,21 +69,9 @@ class AuthRoutes:
             refresh_token: str,
             db: AsyncSession = Depends(database),
         ):
-            user = await self.user_service.decode_token(
-                refresh_token, TokenType.REFRESH, db
+            user, access_token = await self.user_service.au.access_refresh(
+                response, refresh_token, db
             )
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid refresh token",
-                )
-
-            access_token = await self.user_service.generate_token(
-                TokenType.ACCESS, user.id, ttl_in_minutes=30
-            )
-            print(access_token)
-
-            # response.set_cookie("refresh_token", refresh_token, httponly=True, max_age=7200)
             return OnLoginResponse(
                 user=UserRead(
                     id=user.id,
@@ -146,35 +94,41 @@ class AuthRoutes:
             # bg_tasks: BackgroundTasks,
             db: AsyncSession = Depends(database),
         ):
-            user = await repo.get_user_by_email(user_email, db)
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User not found",
-                )
-            verify_token = await self.user_service.generate_token(
-                TokenType.VERIFY, user.id, ttl_in_minutes=60
+            return await self.user_service.au.on_request_verify(
+                user_email=user_email, request=request, db=db
             )
-            await send_email_verification(
-                user.email, user.username, verify_token, request.headers["Origin"]
-            )
-            return {"detail": f"Email instructions to verify was sent to {user.email}."}
 
         @router.get("/verify/{verify_token}", status_code=status.HTTP_200_OK)
         async def verify(
             verify_token: str,
             db: AsyncSession = Depends(database),
         ):
-            user = await self.user_service.decode_token(
-                verify_token, TokenType.VERIFY, db
-            )
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid token",
-                )
+            return await self.user_service.au.verify_user(verify_token, db)
 
-            return {"detail": "Email verified"}
+        return router
+
+    def get_forget_routes(self):
+        router = APIRouter()
+
+        @router.post("/forget-password", status_code=status.HTTP_200_OK)
+        async def forget_password(
+            user_email: str,
+            request: Request,
+            db: AsyncSession = Depends(database),
+        ):
+            return await self.user_service.au.forget_password(
+                email=user_email, request=request, db=db
+            )
+
+        @router.post("/set_new_password", status_code=status.HTTP_200_OK)
+        async def set_new_password(
+            token: str,
+            new_password: str,
+            db: AsyncSession = Depends(database),
+        ):
+            return await self.user_service.au.set_new_password(
+                reset_token=token, new_password=new_password, db=db
+            )
 
         return router
 

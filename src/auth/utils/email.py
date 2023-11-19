@@ -51,6 +51,8 @@ async def send_email_for_reset_pswd(
     except ConnectionErrors as e:
         print(e)
 
+    return {"detail": f"Email instructions to password reset was sent to {email}."}
+
 
 async def send_email_verification(
     email: EmailStr, username: str, verify_token: str, host: str
@@ -77,3 +79,5 @@ async def send_email_verification(
         await fm.send_message(message, template_name="email_verification.html")
     except ConnectionErrors as e:
         print(e)
+
+    return {"detail": f"Email instructions to verify was sent to {email}."}

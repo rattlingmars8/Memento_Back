@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     cloudinary_api_key: int = Field()
     cloudinary_api_secret: str = Field()
 
+    ttl_access_token: int = Field()
+    ttl_refresh_token: int = Field()
+    ttl_verify_token: int = Field()
+    ttl_forget_password_token: int = Field()
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
