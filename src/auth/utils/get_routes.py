@@ -5,11 +5,18 @@ from fastapi import (
     status,
     Response,
 )
-from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.schemas import UserRead, UserCreate, OnLoginResponse
-from src.auth.service import user_service
+from src.auth.schemas import (
+    UserRead,
+    UserCreate,
+    OnLoginResponse,
+    UserPage,
+    RequestVerifyEmail,
+)
+from src.auth.service import user_service, current_active_user
+from src.database.sql.models import User
 from src.database.sql.postgres import database
 
 
@@ -89,13 +96,13 @@ class AuthRoutes:
 
         @router.post("/request-verify", status_code=status.HTTP_200_OK)
         async def request_verify(
-            user_email: str,
+            user_email: RequestVerifyEmail,
             request: Request,
             # bg_tasks: BackgroundTasks,
             db: AsyncSession = Depends(database),
         ):
             return await self.user_service.au.on_request_verify(
-                user_email=user_email, request=request, db=db
+                user_email=user_email.email, request=request, db=db
             )
 
         @router.get("/verify/{verify_token}", status_code=status.HTTP_200_OK)
@@ -129,6 +136,21 @@ class AuthRoutes:
             return await self.user_service.au.set_new_password(
                 reset_token=token, new_password=new_password, db=db
             )
+
+        return router
+
+    def get_user_page(self):
+        router = APIRouter()
+
+        @router.get(
+            "/user/{user_id}", status_code=status.HTTP_200_OK
+        )
+        async def get_user_page(
+            user_id: str,
+            user: User = Depends(current_active_user),
+            db: AsyncSession = Depends(database),
+        ):
+            return await self.user_service.get_user_page(user_id, user, db)
 
         return router
 

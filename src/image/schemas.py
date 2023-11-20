@@ -1,7 +1,11 @@
 import typing
 import uuid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
+
+from src.comment.schemas import CommentSchemaResponse
+from src.database.sql.models import Tag, Comment
+from src.tag.schemas import TagSchemaResponse
 
 
 class ImageSchemaRequest(BaseModel):
@@ -51,13 +55,22 @@ class EditFormData(BaseModel):
     rotation: typing.Optional[ImageRotationTransformation] = Field(default=None)
 
 
+class OwnerInfo(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    username: str
+    avatar: str
+
+
 class ImageSchemaResponse(ImageSchemaRequest):
     id: int
     title: str
-    owner_id: uuid.UUID
-    owner_username: str
+    owner: OwnerInfo
     cloudinary_url: str
     rating: float
+    likes: int
+    tags: list[str]
+    comments: list[CommentSchemaResponse]
     edited_cloudinary_url: str | None
     created_at: datetime
     updated_at: datetime | None

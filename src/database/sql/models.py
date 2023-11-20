@@ -44,16 +44,16 @@ class User(Base):
         "Permission", back_populates="users", lazy="joined"
     )
     images: Mapped[list["Image"]] = relationship(
-        "Image", back_populates="owner", lazy="joined"
+        "Image", back_populates="owner", lazy="joined", cascade="all, delete"
     )
     comments: Mapped[list["Comment"]] = relationship(
-        "Comment", back_populates="owner", lazy="noload"
+        "Comment", back_populates="owner", lazy="noload", cascade="all, delete"
     )
     ratings: Mapped[list["Rating"]] = relationship(
-        "Rating", back_populates="owner", lazy="joined"
+        "Rating", back_populates="owner", lazy="joined", cascade="all, delete"
     )
     likes: Mapped[list["Like"]] = relationship(
-        "Like", back_populates="owner", lazy="joined"
+        "Like", back_populates="owner", lazy="joined", cascade="all, delete"
     )
 
 
@@ -91,7 +91,7 @@ class Comment(Base):
     __tablename__ = "comments"
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id"))
-    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id"))
+    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id", ondelete="CASCADE"))
     text: Mapped[str] = mapped_column(String(200))
 
     created_at: Mapped[datetime] = mapped_column(
@@ -108,7 +108,7 @@ class Comment(Base):
 class Image(Base):
     __tablename__ = "images"
     id: Mapped[int] = mapped_column(primary_key=True)
-    owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id"))
+    owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(30), nullable=True, default=None)
 
     cloudinary_url: Mapped[str] = mapped_column(
@@ -120,7 +120,7 @@ class Image(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=None, onupdate=func.now(), nullable=True
     )
-    owner: Mapped[User] = relationship("User", back_populates="images", lazy="noload")
+    owner: Mapped[User] = relationship("User", back_populates="images", lazy="joined")
     tags: Mapped[list["Tag"]] = relationship(
         "Tag",
         secondary="image_tags",
@@ -132,7 +132,7 @@ class Image(Base):
         "Comment", back_populates="image", lazy="joined", cascade="all, delete"
     )
     likes: Mapped[list["Like"]] = relationship(
-        "Like", back_populates="image", lazy="joined"
+        "Like", back_populates="image", lazy="joined", cascade="all, delete"
     )
 
 
@@ -148,7 +148,7 @@ class Tag(Base):
 class ImageTag(Base):
     __tablename__ = "image_tags"
     id: Mapped[int] = mapped_column(primary_key=True)
-    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id"))
+    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id", ondelete="CASCADE"))
     tag_id: Mapped[int] = mapped_column(Integer, ForeignKey("tags.id"))
 
 
@@ -156,7 +156,7 @@ class Rating(Base):
     __tablename__ = "ratings"
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id"))
-    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id"))
+    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id", ondelete="CASCADE"))
     value: Mapped[int] = mapped_column(Integer, nullable=False)
     owner: Mapped[User] = relationship("User", back_populates="ratings")
 
@@ -165,7 +165,7 @@ class Like(Base):
     __tablename__ = "likes"
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id"))
-    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id"))
+    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id", ondelete="CASCADE"))
     owner: Mapped[User] = relationship("User", back_populates="likes")
     image: Mapped[Image] = relationship("Image", back_populates="likes")
     created_at: Mapped[datetime] = mapped_column(
