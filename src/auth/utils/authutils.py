@@ -79,6 +79,11 @@ class Auth:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
             )
+        if user.refresh_token != refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            )
 
         access_token = await self.jwt_settings.create_token(
             TokenType.ACCESS, user.id, ttl_in_minutes=settings.ttl_access_token
@@ -100,7 +105,9 @@ class Auth:
             user.email, user.username, forget_token, request.headers["Origin"]
         )
 
-    async def set_new_password(self, reset_token: str, new_password: str, db: AsyncSession):
+    async def set_new_password(
+        self, reset_token: str, new_password: str, db: AsyncSession
+    ):
         user = await self.jwt_settings.decode_token(reset_token, TokenType.FORGOT, db)
         if not user:
             raise HTTPException(
@@ -145,7 +152,14 @@ class Auth:
         return access_token, refresh_token
 
     def _set_tokens_in_response(self, response: Response, refresh_token: str):
-        response.set_cookie("refresh_token", refresh_token, httponly=True, max_age=7200)
+        response.set_cookie(
+            "refresh_token",
+            refresh_token,
+            httponly=True,
+            expires=60 * settings.ttl_refresh_token,
+            samesite="lax",
+            secure=True,
+        )
 
     async def _check_existing_user(self, user_create: UserCreate, db: AsyncSession):
         is_exists_email = await repo.get_user_by_email(user_create.email, db)
