@@ -12,8 +12,7 @@ from src.auth.schemas import (
     UserRead,
     UserCreate,
     OnLoginResponse,
-    UserPage,
-    RequestVerifyEmail,
+    RequestVerifyEmailOrForgetPassword,
 )
 from src.auth.service import user_service, current_active_user
 from src.database.sql.models import User
@@ -72,12 +71,11 @@ class AuthRoutes:
 
         @router.post("/jwt/refresh", status_code=status.HTTP_200_OK)
         async def refresh_route(
-            response: Response,
-            refresh_token: str,
+            request: Request,
             db: AsyncSession = Depends(database),
         ):
             user, access_token = await self.user_service.au.access_refresh(
-                response, refresh_token, db
+                request, db
             )
             return OnLoginResponse(
                 user=UserRead(
@@ -96,7 +94,7 @@ class AuthRoutes:
 
         @router.post("/request-verify", status_code=status.HTTP_200_OK)
         async def request_verify(
-            user_email: RequestVerifyEmail,
+            user_email: RequestVerifyEmailOrForgetPassword,
             request: Request,
             # bg_tasks: BackgroundTasks,
             db: AsyncSession = Depends(database),
@@ -117,14 +115,14 @@ class AuthRoutes:
     def get_forget_routes(self):
         router = APIRouter()
 
-        @router.post("/forget-password", status_code=status.HTTP_200_OK)
+        @router.post("/forgot-password", status_code=status.HTTP_200_OK)
         async def forget_password(
-            user_email: str,
+            user_email: RequestVerifyEmailOrForgetPassword,
             request: Request,
             db: AsyncSession = Depends(database),
         ):
             return await self.user_service.au.forget_password(
-                email=user_email, request=request, db=db
+                email=user_email.email, request=request, db=db
             )
 
         @router.post("/set_new_password", status_code=status.HTTP_200_OK)

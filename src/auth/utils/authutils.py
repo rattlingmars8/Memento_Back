@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
@@ -68,39 +69,37 @@ class Auth:
             )
         return {"detail": "Email verified"}
 
-    async def access_refresh(
-        self, response: Response, refresh_token: str, db: AsyncSession
-    ):
-        user = await self.jwt_settings.decode_token(
-            refresh_token, TokenType.REFRESH, db
-        )
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
+    async def access_refresh(self, request: Request, db: AsyncSession):
+        if "refresh_token" in request.cookies:
+            refresh_token = request.cookies["refresh_token"]
+            user = await self.jwt_settings.decode_token(
+                refresh_token, TokenType.REFRESH, db
             )
-        if user.refresh_token != refresh_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
+            if not user or user.refresh_token != refresh_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token",
+                )
+            access_token = await self.jwt_settings.create_token(
+                TokenType.ACCESS, user.id, ttl_in_minutes=settings.ttl_access_token
             )
-
-        access_token = await self.jwt_settings.create_token(
-            TokenType.ACCESS, user.id, ttl_in_minutes=settings.ttl_access_token
+            return user, access_token
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
         )
-        return user, access_token
 
     async def forget_password(self, email: str, request: Request, db: AsyncSession):
         user = await repo.get_user_by_email(email, db)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
+                detail="No user with this email",
             )
         forget_token = await self.jwt_settings.create_token(
             TokenType.FORGOT, user.id, ttl_in_minutes=settings.ttl_forget_password_token
         )
-        print(forget_token)
+        # print(forget_token)
         return await send_email_for_reset_pswd(
             user.email, user.username, forget_token, request.headers["Origin"]
         )
@@ -156,9 +155,10 @@ class Auth:
             "refresh_token",
             refresh_token,
             httponly=True,
-            expires=60 * settings.ttl_refresh_token,
+            expires=(
+                datetime.utcnow() + timedelta(minutes=settings.ttl_refresh_token)
+            ).strftime("%a, %d %b %Y %H:%M:%S GMT"),
             samesite="lax",
-            secure=True,
         )
 
     async def _check_existing_user(self, user_create: UserCreate, db: AsyncSession):

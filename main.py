@@ -22,7 +22,9 @@ from src.rating.routes import router as rating
 
 origins = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5173"
+    "http://localhost",
+    "http://127.0.0.1"
 ]
 
 
@@ -87,5 +89,5 @@ async def authenticated_route(user: User = Depends(current_active_user)):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
     #  uvicorn main:app --host localhost --port 8000

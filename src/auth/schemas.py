@@ -35,8 +35,11 @@ class UserPage(BaseModel):
     images: list[ImageSchemaResponse]
 
 
-class RequestVerifyEmail(BaseModel):
+class RequestVerifyEmailOrForgetPassword(BaseModel):
     email: EmailStr
 
     class Config:
         from_attributes: True
+
+
+
