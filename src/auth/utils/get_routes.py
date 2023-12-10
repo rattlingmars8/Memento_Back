@@ -66,17 +66,31 @@ class AuthRoutes:
 
         return router
 
+    def generate_logout_route(self):
+        router = APIRouter()
+
+        @router.get("/logout", status_code=status.HTTP_204_NO_CONTENT)
+        async def logout_route(response: Response):
+            return await self.user_service.au.logout_user(response)
+
+        return router
+
     def generate_refresh_route(self):
         router = APIRouter()
 
-        @router.post("/jwt/refresh", status_code=status.HTTP_200_OK)
+        @router.get(
+            "/jwt/refresh",
+            status_code=status.HTTP_200_OK,
+            responses={
+                status.HTTP_200_OK: {"model": OnLoginResponse},
+                status.HTTP_401_UNAUTHORIZED: {"detail": "Invalid refresh token"},
+            },
+        )
         async def refresh_route(
             request: Request,
             db: AsyncSession = Depends(database),
         ):
-            user, access_token = await self.user_service.au.access_refresh(
-                request, db
-            )
+            user, access_token = await self.user_service.au.access_refresh(request, db)
             return OnLoginResponse(
                 user=UserRead(
                     id=user.id,
@@ -140,15 +154,25 @@ class AuthRoutes:
     def get_user_page(self):
         router = APIRouter()
 
-        @router.get(
-            "/user/{user_id}", status_code=status.HTTP_200_OK
-        )
+        @router.get("/user/{user_id}", status_code=status.HTTP_200_OK)
         async def get_user_page(
             user_id: str,
             user: User = Depends(current_active_user),
             db: AsyncSession = Depends(database),
         ):
             return await self.user_service.get_user_page(user_id, user, db)
+
+        @router.get("/me", status_code=status.HTTP_200_OK, response_model=UserRead)
+        async def get_me(
+            user: User = Depends(current_active_user),
+            db: AsyncSession = Depends(database),
+        ):
+            return UserRead(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                avatar=user.avatar,
+            )
 
         return router
 

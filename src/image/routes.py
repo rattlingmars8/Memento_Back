@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio.client import Redis
 
 from src.auth.service import current_active_user
+from src.comment.schemas import CommentSchemaResponse
 from src.database.sql.postgres import database
 from src.database.cache.redis_conn import cache_database
 from src.database.sql.models import User
@@ -26,9 +27,12 @@ from src.image.schemas import (
     ImageSchemaResponse,
     ImageSchemaUpdateRequest,
     EditFormData,
+    ImageSchemaResponse,
+    OwnerInfo,
 )
 from src.auth.utils.access import access_service
 from src.image.utils.cloudinary_service import UploadImage, ImageEditor
+from src.auth.repository import id_user_auth
 
 router = APIRouter(prefix="/image", tags=["images"])
 
@@ -44,7 +48,7 @@ async def get_feed(
     feed = await ImageQuery.get_feed(limit, offset, db)
     if not feed:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Feed not found!"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Feed is empty!"
         )
     return feed
 
@@ -98,16 +102,19 @@ async def create_image(
     r = UploadImage.upload(image_file.file, public_id)
     src_url = UploadImage.get_pic_url(public_id, r)
     image = await ImageQuery.create(title, src_url, user, db)
+    # owner_db = await id_user_auth(user.id, db)
+    owner = OwnerInfo(
+        id=user.id, email=user.email, username=user.username, avatar=user.avatar
+    )
     response = ImageSchemaResponse(
+        owner=owner,
         id=image.id,
-        title=title,
-        owner_id=user.id,
-        owner_username=user.username,
-        cloudinary_url=src_url,
+        title=image.title,
+        cloudinary_url=image.cloudinary_url,
         rating=image.rating,
         edited_cloudinary_url=image.edited_cloudinary_url,
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
         )
 
     return response

@@ -43,9 +43,9 @@ class JWTContext:
         self, token: str, token_type: TokenType, db: AsyncSession
     ) -> dict | User | bool:
         payload = await self._verify_token(token, token_type)
-        print(payload)
+        # print(payload)
         user = await repo.id_user_auth(payload["uid"], db=db)
-        print(user)
+        # print(user)
 
         if token_type == TokenType.VERIFY:
             if user.is_verified:

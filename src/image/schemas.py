@@ -62,18 +62,32 @@ class OwnerInfo(BaseModel):
     avatar: str
 
 
-class ImageSchemaResponse(ImageSchemaRequest):
+# class ImageSchemaResponse(ImageSchemaRequest):
+#     id: int
+#     title: str
+#     owner: OwnerInfo
+#     cloudinary_url: str
+#     rating: float
+#     likes: int
+#     tags: list[str]
+#     comments: list[CommentSchemaResponse]
+#     edited_cloudinary_url: str | None
+#     created_at: datetime
+#     updated_at: datetime | None
+#
+#     class Config:
+#         from_attributes: True
+
+
+class ImageSchemaResponse(BaseModel):
+    owner: OwnerInfo
     id: int
     title: str
-    owner: OwnerInfo
     cloudinary_url: str
-    rating: float
-    likes: int
-    tags: list[str]
-    comments: list[CommentSchemaResponse]
     edited_cloudinary_url: str | None
     created_at: datetime
     updated_at: datetime | None
 
     class Config:
         from_attributes: True
+        extra = "allow"

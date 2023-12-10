@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.sql.models import Image, User, Like
-from src.image.schemas import ImageSchemaUpdateRequest, ImageSchemaResponse
+from src.image.schemas import ImageSchemaUpdateRequest, ImageSchemaResponse, OwnerInfo
 
 
 async def get_owner_data(image: Image, session: AsyncSession):
@@ -49,7 +49,7 @@ class ImageQuery:
             offset: int,
             session: AsyncSession
     ):
-        stmt = select(Image).limit(limit).offset(offset)
+        stmt = select(Image).limit(limit).offset(offset).order_by(Image.created_at)
         feed = await session.execute(stmt)
         result = feed.scalars().unique().all()
 
@@ -58,9 +58,18 @@ class ImageQuery:
             print(image)
             owner = await get_owner_data(image, session)  # Отримуємо об'єкт користувача
             img_feed = ImageSchemaResponse(
-                **image.__dict__,
-                owner_username=owner.username  # Додаємо ім'я користувача до схеми відповіді
-            )
+                owner=OwnerInfo(**owner.__dict__),
+                id=image.id,
+                title=image.title,
+                cloudinary_url=image.cloudinary_url,
+                edited_cloudinary_url=image.edited_cloudinary_url,
+                created_at=image.created_at,
+                updated_at=image.updated_at,
+                rating=image.rating,
+                likes=len(image.likes),
+                tags=[tag.name for tag in image.tags],
+                comments=len(image.comments),
+                )
             img_feed_list.append(img_feed)
         return img_feed_list
 

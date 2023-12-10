@@ -44,6 +44,9 @@ class Auth:
         self._set_tokens_in_response(response, refresh_token)
         return user, access_token
 
+    async def logout_user(self, response: Response):
+        response.delete_cookie(key="refresh_token")
+
     async def on_request_verify(
         self, user_email: str, request: Request, db: AsyncSession
     ):
